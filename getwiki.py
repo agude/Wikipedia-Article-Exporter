@@ -19,8 +19,8 @@
 #  The most recent version of this program is avaible at:
 #  http://code.google.com/p/wikipedia-article-exporter/
 #
-#  Version 2.0
-#  Sept. 24th (Wednesday), 2008
+#  Version 2.0.1
+#  Sept. 25th (Thursday), 2008
 """
 
 import urllib,urllib2
@@ -31,29 +31,29 @@ import cjson # Using 1.0.5, found at: http://pypi.python.org/pypi/python-cjson/
 """
     This part allows command line options to be parsed
 """
-usage = "usage: %prog [OPTIONS] -f 'DEST_FILE' -a 'SOURCE_ARTICLE'"
-version = "%prog Version 2.0\nCopyright (C) 2008 Alexander Gude - alex.public.account+GetWiki@gmail.com\nThis is free software.  You may redistribute copies of it under the terms of\nthe GNU General Public License <http://www.gnu.org/licenses/gpl.html>.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Alexander Gude."
+usage = "usage: python %prog [OPTIONS] -f 'DEST_FILE' -a 'SOURCE_ARTICLE'"
+version = "%prog Version 2.0.1\nCopyright (C) 2008 Alexander Gude - alex.public.account+GetWiki@gmail.com\nThis is free software.  You may redistribute copies of it under the terms of\nthe GNU General Public License <http://www.gnu.org/licenses/gpl.html>.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Alexander Gude."
 parser = OptionParser(usage=usage,version=version)
 parser.add_option("-a", "--article", action="store", type="string", dest="articlename", help="the article name to be exported")
-parser.add_option("-c", "--cat", "--concatenate", action="store_false", dest="split", help="save all revisions to one xml file")
 parser.add_option("-f", "--file", action="store", type="string", dest="filename", help="the file to save the article to")
+parser.add_option("-c", "--cat", "--concatenate", action="store_false", dest="split", help="save all revisions to one xml file")
+parser.add_option("-s", "--split", action="store_true", dest="split", default=True, help="Split into multiple xml files with length equal to limit revisions")
 parser.add_option("-l", "--limit", action="store", type="string", dest="limit", default="50", help="the number of Wikipedia revisions to return at a time, max 50")
 parser.add_option("-q", "--quiet", action="store_false", dest="verbose", help="don't print status messages to stdout")
-parser.add_option("-s", "--split", action="store_true", dest="split", default=True, help="Split into multiple xml files with length equal to limit revisions")
 parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False, help="print status messages to stdout")
-parser.add_option("-i", "--rvstartid", action="store", type="string", dest="rvstartid", default=None, help="rvstartid to begin downloading")
-parser.add_option("-p", "--prop", action="store", type="string", dest="prop", default='revisions', help="sets prop, currently only works with 'revisions'")
 parser.add_option("-t", "--action", action="store", type="string", dest="action", default='query', help="sets action, currently only works with 'query'")
+parser.add_option("-p", "--prop", action="store", type="string", dest="prop", default='revisions', help="sets prop, currently only works with 'revisions'")
 parser.add_option("-r", "--rvdir", action="store", type="string", dest="rvdir", default='newer', help="'newer' or 'older', if newer items are returned with oldest first, otherwise newest first")
+parser.add_option("-i", "--rvstartid", action="store", type="string", dest="rvstartid", default=None, help="rvstartid to begin downloading")
 
 (options, args) = parser.parse_args()
 
 def getArticle(articlename=options.articlename, action=options.action, prop=options.prop, rvstartid=options.rvstartid, rvdir=options.rvdir, limit=options.limit, verbose=options.verbose, split=options.split):
     """
-    This function actually downloads the contents of the requested article. It has to be looped to fully grab the article though.
+    This function downloads the contents of the requested article. It has to be looped to fully grab the article though. It returns a mixed dictions/list object, that must be parsed by toXML().
 
     usage:
-        getArticle(articlename, action, prop, rvstartid, rvdir, limit, verbose, split)
+        (contents,startid) = getArticle(articlename, action, prop, rvstartid, rvdir, limit, verbose, split)
 
     input:
         articlename     (str)      : the name of the article to download
@@ -67,8 +67,8 @@ def getArticle(articlename=options.articlename, action=options.action, prop=opti
         split           (bool)     : split revisions into files if true, else saves all revisions to one large file
 
     output:
-        contents        (str)      : returned if requested page has revisions, and is the content of those revisions
-        None            (None)     : returned if requested page has no revisions, used to halt loops
+        contents        (dict)     : a dictionary/list object, to be parsed by toXML()
+        startid         (int)      : rvstartid of the first entry in the NEXT set
     """
     if verbose: print "\tFetching Article from Wikipedia and parsing"
     if rvstartid == None:
@@ -103,13 +103,14 @@ def getArticle(articlename=options.articlename, action=options.action, prop=opti
 
 def toXML( contents, verbose=options.verbose ):
     """
-    This function writes the contents to a file
+    This function takes in a dictionary/list object (of a very special form, as output by getArticle())
+    and returns XML in a str
 
     usage:
          contents = toXML( contents, verbose )
 
     input:
-        contents        (str)      : the contents to be writen to a file
+        contents        (str)      : the contents to be converted to XML
         verbose         (bool)     : print progress to stdout or not
 
     output:
@@ -189,21 +190,19 @@ def toXML( contents, verbose=options.verbose ):
 
     if verbose: print "\t\tFinished revision loop"
 
-        
     # Closing up the tags
     if verbose: print "\t\tClosing XML"
     finalxml.append('  </page>')
     finalxml.append('</mediawiki>')
-    
 
     return '\n'.join(finalxml)
 
 def makesafe(str):
     """
-    Subs <, >, & and " in strings 
+    Subs <, >, & and " in strings, also replaces '\\/'
 
     usage:
-         bool isIP( name )
+         str = makesafe( str )
 
     input:
         str             (str)      : a string
@@ -222,7 +221,7 @@ def isIP( name ):
     If the string is an IP address, returns True, else False
 
     usage:
-         bool isIP( name )
+         bool = isIP( name )
 
     input:
         name            (str)      : username to test
@@ -246,16 +245,16 @@ def returnXMLtag(tag, cont, space='', alt=None):
     Returns 'space<tag alt>Cont</tag>'
 
     usage:
-         xml.append( returnXMLtag( tag, cont, alt ) )
+         xml.append( returnXMLtag( tag, cont, space, alt ) )
 
     input:
         tag             (str)      : xml tag name
         cont            (str)      : value to store in tag
         space           (str)      : str of the form '    '
         alt             (str)      : aditional values to pack into the tag
-                                     if none, uses <tag>cont</tag>
+                                     if none, uses 'space<tag>cont</tag>'
     output:
-        xml             (str)      : string in the form <tag alt>Cont</tag>
+        xml             (str)      : string in the form 'space<tag alt>Cont</tag>'
     """
     if not alt:
         return '%s<%s>%s</%s>'%(space,tag,cont,tag)
@@ -267,11 +266,11 @@ def writeFile( contents, filename=options.filename, verbose=options.verbose ):
     This function writes the contents to a file
 
     usage:
-         writeFile(contents,filename)
+         writeFile( contents, filename, verbose )
 
     input:
         contents        (str)      : the contents to be writen to a file
-        filename        (str)      : the name of the file to be saved to
+        filename        (str)      : the name of the file to save to
         verbose         (bool)     : print progress to stdout or not
 
     output:
@@ -311,7 +310,6 @@ def returnXMLhead(verbose=options.verbose):
     output:
         xmllist         (list)     : contains the xml header, each lines is a line of xml
     """
-
     if verbose: print "\t\tWriting XML header"
     finalxml= """<mediawiki xmlns="http://www.mediawiki.org/xml/export-0.3/"\
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
@@ -351,7 +349,8 @@ http://www.mediawiki.org/xml/export-0.3.xsd" version="0.3" xml:lang="en">
 
 def downloadArticles(articlename=options.articlename, action=options.action, prop=options.prop, rvstartid=options.rvstartid, rvdir=options.rvdir, limit=options.limit, verbose=options.verbose, split=options.split, filename=options.filename):
     """
-    This function loops getArticle() and getLastEditDate() to download the article and get it contents in final order.
+    This function loops getArticle() to download the article, as well as passes it to toXML() to convert it,
+    before finally passing it to writeFile() to output it
 
     usage:
         downloadArticles(articlename, action, prop, rvstartid, rvdir, limit, verbose, split, filename)
@@ -366,12 +365,11 @@ def downloadArticles(articlename=options.articlename, action=options.action, pro
                                      if split = True, then each file will have this many revisions saved to it
         verbose         (bool)     : print progress to stdout or not
         split           (bool)     : split revisions into files if true, else saves all revisions to one large file
-        filename        (str)      : the name of the file to be saved to
+        filename        (str)      : the name of the file to save to
 
     output:
         No output (not even None)
     """
-
     if verbose: print "Begining Export"
     if verbose: print "\tSplit article into multiple files set to: "+str(split)
 
