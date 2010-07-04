@@ -19,44 +19,50 @@
 #  The most recent version of this program is avaible at:
 #  http://code.google.com/p/wikipedia-article-exporter/
 #
-#  Version 1.1
-#  May 4th (Sunday), 2008
+#  Version 2.0
+#  Sept. 24th (Wednesday), 2008
 """
 
 import urllib,urllib2
 from optparse import OptionParser
+import cjson # Using 1.0.5, found at: http://pypi.python.org/pypi/python-cjson/
 
 ## This part is called before functions... because if it isn't then the functions complain that options.FOO isn't defined
 """
     This part allows command line options to be parsed
 """
-usage = "usage: %prog [OPTIONS] -f DEST_FILE -a SOURCE_ARTICLE"
-version = "%prog Version 1.1\nCopyright (C) 2008 Alexander Gude - alex.public.account+GetWiki@gmail.com\nThis is free software.  You may redistribute copies of it under the terms of\nthe GNU General Public License <http://www.gnu.org/licenses/gpl.html>.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Alexander Gude."
+usage = "usage: %prog [OPTIONS] -f 'DEST_FILE' -a 'SOURCE_ARTICLE'"
+version = "%prog Version 2.0\nCopyright (C) 2008 Alexander Gude - alex.public.account+GetWiki@gmail.com\nThis is free software.  You may redistribute copies of it under the terms of\nthe GNU General Public License <http://www.gnu.org/licenses/gpl.html>.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Alexander Gude."
 parser = OptionParser(usage=usage,version=version)
 parser.add_option("-a", "--article", action="store", type="string", dest="articlename", help="the article name to be exported")
 parser.add_option("-c", "--cat", "--concatenate", action="store_false", dest="split", help="save all revisions to one xml file")
 parser.add_option("-f", "--file", action="store", type="string", dest="filename", help="the file to save the article to")
-parser.add_option("-l", "--limit", action="store", type="string", dest="limit", default="100", help="the number of Wikipedia revisions to return at a time, max 100")
+parser.add_option("-l", "--limit", action="store", type="string", dest="limit", default="50", help="the number of Wikipedia revisions to return at a time, max 50")
 parser.add_option("-q", "--quiet", action="store_false", dest="verbose", help="don't print status messages to stdout")
 parser.add_option("-s", "--split", action="store_true", dest="split", default=True, help="Split into multiple xml files with length equal to limit revisions")
 parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False, help="print status messages to stdout")
+parser.add_option("-i", "--rvstartid", action="store", type="string", dest="rvstartid", default=None, help="rvstartid to begin downloading")
+parser.add_option("-p", "--prop", action="store", type="string", dest="prop", default='revisions', help="sets prop, currently only works with 'revisions'")
+parser.add_option("-t", "--action", action="store", type="string", dest="action", default='query', help="sets action, currently only works with 'query'")
+parser.add_option("-r", "--rvdir", action="store", type="string", dest="rvdir", default='newer', help="'newer' or 'older', if newer items are returned with oldest first, otherwise newest first")
 
 (options, args) = parser.parse_args()
 
-def getArticle(articlename=options.articlename, action='submit', limit=options.limit, offset=1, verbose=options.verbose, split=options.split):
+def getArticle(articlename=options.articlename, action=options.action, prop=options.prop, rvstartid=options.rvstartid, rvdir=options.rvdir, limit=options.limit, verbose=options.verbose, split=options.split):
     """
     This function actually downloads the contents of the requested article. It has to be looped to fully grab the article though.
 
     usage:
-        getArticle(articlename, action, limit, offset, verbose, split)
+        getArticle(articlename, action, prop, rvstartid, rvdir, limit, verbose, split)
 
     input:
         articlename     (str)      : the name of the article to download
-        action          (str)      : sets the action for export, currently only 'submit' is valid 
-        limit           (int)      : the number of revisions to request at one time, [1:100] inclusive 
+        action          (str)      : sets the action, currently only query is useful if you want to use prop=revisions
+        prop            (str)      : sets the property, currently script only supports revisions (downloads revisions)
+        rvstartid       (int)      : sets the inclusive comment id to start at
+        rvdir           (str)      : 'newer' or 'older', newer means oldest first, older means newest entries first
+        limit           (int)      : the number of revisions to request at one time, [1:50] inclusive 
                                      if split = True, then each file will have this many revisions saved to it
-        offset          (str)      : either an int, in which case returns edits starting with the the int'th edit (1 is first, etc.)
-                                     or a date in which case it returns edits after that date but not including that date (2002-01-27T20:25:56Z form)
         verbose         (bool)     : print progress to stdout or not
         split           (bool)     : split revisions into files if true, else saves all revisions to one large file
 
@@ -64,63 +70,199 @@ def getArticle(articlename=options.articlename, action='submit', limit=options.l
         contents        (str)      : returned if requested page has revisions, and is the content of those revisions
         None            (None)     : returned if requested page has no revisions, used to halt loops
     """
-    if verbose: print "Downloading revisions with offset: "+str(offset)
+    if verbose: print "\tFetching Article from Wikipedia and parsing"
+    if rvstartid == None:
+        if verbose: print "\t\tDownloading first revisions"
+    else:
+        if verbose: print "\t\tDownloading revisions starting at: "+str(rvstartid)
 
     ## Sets up urllib and urllib2 to open the page, submit the request, and read the contents into a local variable
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.8.0.4) Gecko/20060508 Firefox/1.5.0.4'} # Needed to fool Wikipedia, it blocks urllib scripts otherwise
-    params = urllib.urlencode({'title': 'Special:Export', 'pages': articlename, 'action': action, 'limit': limit, 'offset': offset})
-    req = urllib2.Request(url='http://en.wikipedia.org/w/index.php', data=params, headers=headers)
+    ### If start id is provided use it, else start at the begining
+    paramsd = {'action': action, 'prop': prop, 'titles': articlename, 'rvlimit': limit, 'rvprop': 'ids|timestamp|user|comment|content', 'rvdir':rvdir, 'format': 'json'}
+    if rvstartid != None: 
+        paramsd['rvstartid'] = rvstartid
+
+    params = urllib.urlencode(paramsd)
+    req = urllib2.Request(url='http://en.wikipedia.org/w/api.php', data=params)
     f = urllib2.urlopen(req)
     contents = f.read()
     f.close()
+    if verbose: print "\t\tDownloading complete"
 
-#    if verbose: print contents
+    # using cjson to convert json to dictionaries and lists
+    if verbose: print "\t\tConverting JSON data into dictionary"
+    contents = cjson.decode( contents )
 
-    ## If we want the file split, then we need only save whatever Wikipedia gives us, otherwise we have to remove extra headers if we want one file 
-    if '<revision>' not in contents: # The last version that contains no new pages will not have a revision tag, so we return None and use it to halt
-        return None
+    ## Check if there are more to download, if so set startid to the next rvstartid
+    if verbose: print "\t\tExtracting rvstartid"
+    try: startid = contents['query-continue']['revisions']['rvstartid']
+    except KeyError: startid = None # None is used to terminate
 
-    if split: 
-        return contents
-    else: 
-        if offset != 1: # If not the first request, strip header
-            return '\n'.join(contents.splitlines()[30:-2])
-        else: # If the first request then we only strip the very last closing tags.
-            return '\n'.join(contents.splitlines()[:-2])
+    ## Now we return the contents, and startid as a tuple
+    return (contents,startid)
 
-def getLastEditDate(contents,verbose=options.verbose):
+def toXML( contents, verbose=options.verbose ):
     """
-    This function returns the date of the last edit of the contents given it.
+    This function writes the contents to a file
 
     usage:
-        getLastEditDate(contents,verbose)
+         contents = toXML( contents, verbose )
 
     input:
-        contents        (str)      : the content of revisions in one long string
+        contents        (str)      : the contents to be writen to a file
         verbose         (bool)     : print progress to stdout or not
 
     output:
-        dates           (str)      : returned if requested page has revisions
-        None            (None)     : returned if requested page has no revisions, used to halt loops
+        finalxml        (str)      : xml string
     """
-    dates = []
+    if verbose: print "\tConverting article to XML"
+    finalxml = returnXMLhead() 
+    # First we try to grab the inner dictionary containing just the article
+    try: contents = contents['query']['pages']
+    except KeyError: raise "Can not extract contents['query']['pages'] in toXML()"
 
-    if verbose: print "Checking for last edit date."
+    # Now we grab the page ID, namespace, and title
+    if verbose: print "\t\tExtracting page ID, namespace, and title"
+    ## If there is more than one key, then you've requested two pages (although I don't know how you did this)
+    ## otherwise we set an articleid and set the value from the dictionary to articlecont
+    if len(contents.keys()) != 1: raise "Unknown key in contents in toXML()"
+    else: articleid = contents.keys()[0]; articlecont = contents[articleid]
 
-    for line in contents.splitlines():
-        if '<timestamp>' in line:
-            date = (line.split('>')[1]).split('<')[0]
-            dates.append(date)
-            if verbose: print date
+    ## if Missing keyword is given, then error! :(
+    if 'missing' in articlecont.keys(): raise "Article is missing!"
 
-    dates.sort()
+    ## Now lets get the namespace
+    try: namespace = articlecont['ns']
+    except KeyError: raise "Can not determine namespace in toXML()"
+
+    ## And the title
+    try: title = makesafe(articlecont['title'])
+    except KeyError: raise "Can not determine title in toXML()"
+
+    ## Finally, we pull out the list of revisions
+    if verbose: print "\t\tExtracting revision list"
+    try: revlist = articlecont['revisions']
+    except KeyError: raise "Can not find revisions in toXML()"
+
+    ## Adding xml tags
+    finalxml.append( returnXMLtag('title', title, space='    ') )
+    finalxml.append( returnXMLtag('id', articleid, space='    ') )
+
+    # Loop through revisions
+    if verbose: i = 0
+    if verbose: print "\t\tBegining revision loop"
+    for rev in revlist:
+        if verbose: print "\t\t\tWorking on Revision %03i"%(i)
+        if verbose: i += 1
+        # Start a new list to contain the xml
+        revxml = ['    <revision>']
+        ## Trying to pull out various values, and making them into xml
+        if verbose: print "\t\t\t\tExtracting revision ID, timestamp, user, and comment"
+        ### ID
+        try: revid = rev['revid']
+        except: raise "Can not find revid for %s in toXML()"%(rev)
+        revxml.append(returnXMLtag('id',revid,space='      '))
+        ### Timestamp
+        try: timestamp = rev['timestamp']
+        except: raise "Can not find timestamp for %s in toXML()"%(rev)
+        revxml.append(returnXMLtag('timestamp',timestamp,space='      '))
+        ### User
+        try: user = rev['user']
+        except: raise "Can not find user for %s in toXML()"%(rev)
+        #### Users need <contributor> tags around them, also IPs and Users are different
+        revxml.append('      <contributor>')
+        if isIP(user): revxml.append(returnXMLtag('ip',user,'        '))
+        else:          revxml.append(returnXMLtag('username',user,'        '))
+        revxml.append('      </contributor>')
+        ### Comment
+        try: comment = makesafe(rev['comment'])
+        except: comment = '' # They do not return a comment if it is blank
+        revxml.append(returnXMLtag('comment',comment,'      '))
+        ### Pulling out the actual contents
+        if verbose: print "\t\t\t\tExtracting contents"
+        try: editcont = makesafe(rev['*'])
+        except: raise "Can not find content for %s in toXML()"%(rev)
+        revxml.append(returnXMLtag('text',editcont,'      ',alt='xml:space="preserve"'))
+        # Close up the xml and add to the finalxml
+        revxml.append('    </revision>')
+        finalxml += revxml
+
+    if verbose: print "\t\tFinished revision loop"
+
+        
+    # Closing up the tags
+    if verbose: print "\t\tClosing XML"
+    finalxml.append('  </page>')
+    finalxml.append('</mediawiki>')
     
-    try:
-        return dates[-1]
-    except: 
-        return None
 
-def writeFile(contents, filename=options.filename, verbose=options.verbose):
+    return '\n'.join(finalxml)
+
+def makesafe(str):
+    """
+    Subs <, >, & and " in strings 
+
+    usage:
+         bool isIP( name )
+
+    input:
+        str             (str)      : a string
+    output:
+        newstr          (str)      : safe str
+    """
+    str = str.replace('&','&amp;') # ALWAYS FIRST or it messes up the other &
+    str = str.replace('<','&lt;')
+    str = str.replace('>','&gt;')
+    str = str.replace('"','&quot;')
+    str = str.replace('\\/','/')
+    return str
+        
+def isIP( name ):
+    """
+    If the string is an IP address, returns True, else False
+
+    usage:
+         bool isIP( name )
+
+    input:
+        name            (str)      : username to test
+    output:
+        bool            (bool)     : True = IP, False = User
+    """
+    # Can it be split on . into 4?
+    namelen = len(name.split('.'))
+    try: assert namelen == 4
+    except AssertionError: return False
+    # Ok, is each of the 4 an Int? And between 0-255
+    for i in range(4):
+        try: null = int(name.split('.')[i]); assert 0 <= null <= 255
+        except ValueError: return False
+        except AssertionError: return False
+    # Ok, I guess it's an IP
+    return True
+
+def returnXMLtag(tag, cont, space='', alt=None):
+    """
+    Returns 'space<tag alt>Cont</tag>'
+
+    usage:
+         xml.append( returnXMLtag( tag, cont, alt ) )
+
+    input:
+        tag             (str)      : xml tag name
+        cont            (str)      : value to store in tag
+        space           (str)      : str of the form '    '
+        alt             (str)      : aditional values to pack into the tag
+                                     if none, uses <tag>cont</tag>
+    output:
+        xml             (str)      : string in the form <tag alt>Cont</tag>
+    """
+    if not alt:
+        return '%s<%s>%s</%s>'%(space,tag,cont,tag)
+    else:
+        return '%s<%s %s>%s</%s>'%(space,tag,alt,cont,tag)
+
+def writeFile( contents, filename=options.filename, verbose=options.verbose ):
     """
     This function writes the contents to a file
 
@@ -135,63 +277,131 @@ def writeFile(contents, filename=options.filename, verbose=options.verbose):
     output:
         No output (not even None)
     """
-    if verbose: print "Writing file "+filename+" now."
+    if verbose: print "\tWriting file "+filename+" now."
 
     try:
-        ff = open(filename,'a')
+        ff = open(filename,'w')
     except IOError, (errno, strerror):
         raise "I/O error(%s): %s" % (errno, strerror)
     else:
-        ff.write(contents)
+        # If it's only ascii, we can just write a nice happy ascii file
+        try:
+            ff.write(contents)
+            if verbose: print "\t\tWriting as ASCII"
+        # otherwise we have to convert it all to unicode
+        except UnicodeEncodeError:
+            ff.write(contents.encode("utf-8"))
+            if verbose: print "\t\tWriting as utf-8"
+
         ff.close()
 
-def downloadArticles(articlename=options.articlename, action='submit', limit=options.limit, offset=1, verbose=options.verbose, split=options.split, filename=options.filename):
+def returnXMLhead(verbose=options.verbose):
+    """
+    This function returns the standard header for our wikipedia XML.
+
+    This huge, stupidly large string has to go somewhere... Might as well
+    put it here
+
+    usage:
+         xmllist = returnXMLhead(verbose)
+
+    input:
+        verbose         (bool)     : print progress to stdout or not
+
+    output:
+        xmllist         (list)     : contains the xml header, each lines is a line of xml
+    """
+
+    if verbose: print "\t\tWriting XML header"
+    finalxml= """<mediawiki xmlns="http://www.mediawiki.org/xml/export-0.3/"\
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
+xsi:schemaLocation="http://www.mediawiki.org/xml/export-0.3/ \
+http://www.mediawiki.org/xml/export-0.3.xsd" version="0.3" xml:lang="en">
+  <siteinfo>
+    <sitename>Wikipedia</sitename>
+    <base>http://en.wikipedia.org/wiki/Main_Page</base>
+    <generator>MediaWiki 1.14alpha</generator>
+    <case>first-letter</case>
+      <namespaces>
+      <namespace key="-2">Media</namespace>
+      <namespace key="-1">Special</namespace>
+      <namespace key="0" />
+      <namespace key="1">Talk</namespace>
+      <namespace key="2">User</namespace>
+      <namespace key="3">User talk</namespace>
+      <namespace key="4">Wikipedia</namespace>
+      <namespace key="5">Wikipedia talk</namespace>
+      <namespace key="6">Image</namespace>
+      <namespace key="7">Image talk</namespace>
+      <namespace key="8">MediaWiki</namespace>
+      <namespace key="9">MediaWiki talk</namespace>
+      <namespace key="10">Template</namespace>
+      <namespace key="11">Template talk</namespace>
+      <namespace key="12">Help</namespace>
+      <namespace key="13">Help talk</namespace>
+      <namespace key="14">Category</namespace>
+      <namespace key="15">Category talk</namespace>
+      <namespace key="100">Portal</namespace>
+      <namespace key="101">Portal talk</namespace>
+    </namespaces>
+  </siteinfo>
+  <page>""".splitlines()
+    
+    return finalxml
+
+def downloadArticles(articlename=options.articlename, action=options.action, prop=options.prop, rvstartid=options.rvstartid, rvdir=options.rvdir, limit=options.limit, verbose=options.verbose, split=options.split, filename=options.filename):
     """
     This function loops getArticle() and getLastEditDate() to download the article and get it contents in final order.
 
     usage:
-        downloadArticles(articlename, action, limit, offset, verbose, split)
+        downloadArticles(articlename, action, prop, rvstartid, rvdir, limit, verbose, split, filename)
 
     input:
         articlename     (str)      : the name of the article to download
-        filename        (str)      : the name of the file to be saved to
-        action          (str)      : sets the action for export, currently only 'submit' is valid 
-        limit           (int)      : the number of revisions to request at one time, [1:100] inclusive 
+        action          (str)      : sets the action, currently only query is useful if you want to use prop=revisions
+        prop            (str)      : sets the property, currently script only supports revisions (downloads revisions)
+        rvstartid       (int)      : sets the inclusive comment id to start at
+        rvdir           (str)      : 'newer' or 'older', newer means oldest first, older means newest entries first
+        limit           (int)      : the number of revisions to request at one time, [1:50] inclusive 
                                      if split = True, then each file will have this many revisions saved to it
-        offset          (str)      : either an int, in which case returns edits starting with the the int'th edit (1 is first, etc.)
-                                     or a date in which case it returns edits after that date but not including that date (2002-01-27T20:25:56Z form)
         verbose         (bool)     : print progress to stdout or not
         split           (bool)     : split revisions into files if true, else saves all revisions to one large file
+        filename        (str)      : the name of the file to be saved to
 
     output:
         No output (not even None)
     """
-    if verbose: print "Split article into multiple files set to: "+str(split)
 
+    if verbose: print "Begining Export"
+    if verbose: print "\tSplit article into multiple files set to: "+str(split)
+
+    ## If the content is going to be split
     if split:
         i = 0
         while True:
-            newcontents = getArticle(articlename=articlename, action=action, limit=limit, offset=offset, verbose=verbose, split=split)
-            if newcontents:
-                writeFile(newcontents,filename+"%03i" % i)
-                offset = getLastEditDate(newcontents)
-                i += 1
+            (cont,startid) = getArticle(articlename=articlename, action=action, prop=prop, rvstartid=rvstartid, rvdir=rvdir, limit=limit, verbose=verbose, split=split)
+            cont = toXML(cont)
+            writeFile(cont,filename+"%03i" % i)
+            if startid == None: break
             else: 
-                break
+                rvstartid = startid
+                i += 1
+    ## If the content is going to be spit out as one huge file
     else:
-        contentslist = []
-        while True:
-            newcontents = getArticle(articlename=articlename, action=action, limit=limit, offset=offset, verbose=verbose, split=split)
-            if newcontents:
-                contentslist.append(newcontents)
-                offset = getLastEditDate(newcontents)
-            else:
-                break
+        # Run the first time
+        limit = 50 # no need to do it in smaller amounts
+        (cont,startid) = getArticle(articlename=articlename, action=action, prop=prop, rvstartid=rvstartid, rvdir=rvdir, limit=limit, verbose=verbose, split=split)
+        while startid: # If None, terminates
+            (newcont,startid) = getArticle(articlename=articlename, action=action, prop=prop, rvstartid=startid, rvdir=rvdir, limit=limit, verbose=verbose, split=split)
+            try: articleid = cont['query']['pages'].keys()[0]
+            except KeyError: raise "Can not determine articleid"
+            try:  cont['query']['pages'][articleid]['revisions'] += newcont['query']['pages'][articleid]['revisions'] # Trying too add revisions lists together
+            except KeyError: raise "Can not open the revisions lists in one of the content versions"
+        # Now with one combined list, we run as normal
+        cont = toXML(cont)
+        writeFile(cont,filename)
 
-        contentslist.append('</page>') # We have removed these two tags before, so we have to finally add them back.
-        contentslist.append('</mediawiki>')
-        contents = '\n'.join(contentslist)
-        writeFile(contents,filename)
+    if verbose: print "Finished Export"
 
 ### RUN Python, RUN!
 downloadArticles()
