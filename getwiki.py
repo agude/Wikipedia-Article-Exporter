@@ -20,7 +20,7 @@
 #  http://code.google.com/p/wikipedia-article-exporter/
 #
 #  Version 1.1
-#  January 26th (Saturday), 2008
+#  May 4th (Sunday), 2008
 """
 
 import urllib,urllib2
@@ -61,8 +61,8 @@ def getArticle(articlename=options.articlename, action='submit', limit=options.l
         split           (bool)     : split revisions into files if true, else saves all revisions to one large file
 
     output:
-        contents        (str)      : Returned if requested page has revisions, and is the content of those revisions
-        None            (None)     : Returned if requested page has no revisions, used to halt loops
+        contents        (str)      : returned if requested page has revisions, and is the content of those revisions
+        None            (None)     : returned if requested page has no revisions, used to halt loops
     """
     if verbose: print "Downloading revisions with offset: "+str(offset)
 
@@ -90,7 +90,7 @@ def getArticle(articlename=options.articlename, action='submit', limit=options.l
 
 def getLastEditDate(contents,verbose=options.verbose):
     """
-    This function returns the date of the last edit to the contents given it.
+    This function returns the date of the last edit of the contents given it.
 
     usage:
         getLastEditDate(contents,verbose)
@@ -100,8 +100,8 @@ def getLastEditDate(contents,verbose=options.verbose):
         verbose         (bool)     : print progress to stdout or not
 
     output:
-        dates           (str)      : Returned if requested page has revisions
-        None            (None)     : Returned if requested page has no revisions, used to halt loops
+        dates           (str)      : returned if requested page has revisions
+        None            (None)     : returned if requested page has no revisions, used to halt loops
     """
     dates = []
 
@@ -111,7 +111,7 @@ def getLastEditDate(contents,verbose=options.verbose):
         if '<timestamp>' in line:
             date = (line.split('>')[1]).split('<')[0]
             dates.append(date)
-#           if verbose: print date
+            if verbose: print date
 
     dates.sort()
     
@@ -128,7 +128,7 @@ def writeFile(contents, filename=options.filename, verbose=options.verbose):
          writeFile(contents,filename)
 
     input:
-        contents        (str)      : Returned if requested page has revisions, and is the content of those revisions
+        contents        (str)      : the contents to be writen to a file
         filename        (str)      : the name of the file to be saved to
         verbose         (bool)     : print progress to stdout or not
 
