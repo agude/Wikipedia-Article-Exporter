@@ -70,11 +70,14 @@ def getArticle(articlename=options.articlename, action=options.action, prop=opti
         contents        (dict)     : a dictionary/list object, to be parsed by toXML()
         startid         (int)      : rvstartid of the first entry in the NEXT set
     """
-    if verbose: print "\tFetching Article from Wikipedia and parsing"
+    if verbose:
+        print "\tFetching Article from Wikipedia and parsing"
     if rvstartid == None:
-        if verbose: print "\t\tDownloading first revisions"
+        if verbose:
+            print "\t\tDownloading first revisions"
     else:
-        if verbose: print "\t\tDownloading revisions starting at: "+str(rvstartid)
+        if verbose:
+            print "\t\tDownloading revisions starting at: "+str(rvstartid)
 
     ## Sets up urllib and urllib2 to open the page, submit the request, and read the contents into a local variable
     ### If start id is provided use it, else start at the begining
@@ -87,16 +90,21 @@ def getArticle(articlename=options.articlename, action=options.action, prop=opti
     f = urllib2.urlopen(req)
     contents = f.read()
     f.close()
-    if verbose: print "\t\tDownloading complete"
+    if verbose:
+        print "\t\tDownloading complete"
 
     # using cjson to convert json to dictionaries and lists
-    if verbose: print "\t\tConverting JSON data into dictionary"
+    if verbose:
+        print "\t\tConverting JSON data into dictionary"
     contents = cjson.decode( contents )
 
     ## Check if there are more to download, if so set startid to the next rvstartid
-    if verbose: print "\t\tExtracting rvstartid"
-    try: startid = contents['query-continue']['revisions']['rvstartid']
-    except KeyError: startid = None # None is used to terminate
+    if verbose:
+        print "\t\tExtracting rvstartid"
+    try: 
+        startid = contents['query-continue']['revisions']['rvstartid']
+    except KeyError: 
+        startid = None # None is used to terminate
 
     ## Now we return the contents, and startid as a tuple
     return (contents,startid)
@@ -116,82 +124,117 @@ def toXML( contents, verbose=options.verbose ):
     output:
         finalxml        (str)      : xml string
     """
-    if verbose: print "\tConverting article to XML"
+    if verbose:
+        print "\tConverting article to XML"
     finalxml = returnXMLhead() 
     # First we try to grab the inner dictionary containing just the article
-    try: contents = contents['query']['pages']
-    except KeyError: raise "Can not extract contents['query']['pages'] in toXML()"
+    try: 
+        contents = contents['query']['pages']
+    except KeyError: 
+        raise "Can not extract contents['query']['pages'] in toXML()"
 
     # Now we grab the page ID, namespace, and title
-    if verbose: print "\t\tExtracting page ID, namespace, and title"
+    if verbose:
+        print "\t\tExtracting page ID, namespace, and title"
     ## If there is more than one key, then you've requested two pages (although I don't know how you did this)
     ## otherwise we set an articleid and set the value from the dictionary to articlecont
-    if len(contents.keys()) != 1: raise "Unknown key in contents in toXML()"
-    else: articleid = contents.keys()[0]; articlecont = contents[articleid]
+    if len(contents.keys()) != 1: 
+        raise "Unknown key in contents in toXML()"
+    else: 
+        articleid = contents.keys()[0]
+        articlecont = contents[articleid]
 
     ## if Missing keyword is given, then error! :(
-    if 'missing' in articlecont.keys(): raise "Article is missing!"
+    if 'missing' in articlecont.keys(): 
+        raise "Article is missing!"
 
     ## Now lets get the namespace
-    try: namespace = articlecont['ns']
-    except KeyError: raise "Can not determine namespace in toXML()"
+    try:
+        namespace = articlecont['ns']
+    except KeyError: 
+        raise "Can not determine namespace in toXML()"
 
     ## And the title
-    try: title = makesafe(articlecont['title'])
-    except KeyError: raise "Can not determine title in toXML()"
+    try: 
+        title = makesafe(articlecont['title'])
+    except KeyError: 
+        raise "Can not determine title in toXML()"
 
     ## Finally, we pull out the list of revisions
-    if verbose: print "\t\tExtracting revision list"
-    try: revlist = articlecont['revisions']
-    except KeyError: raise "Can not find revisions in toXML()"
+    if verbose: 
+        print "\t\tExtracting revision list"
+    try: 
+        revlist = articlecont['revisions']
+    except KeyError: 
+        raise "Can not find revisions in toXML()"
 
     ## Adding xml tags
     finalxml.append( returnXMLtag('title', title, space='    ') )
     finalxml.append( returnXMLtag('id', articleid, space='    ') )
 
     # Loop through revisions
-    if verbose: i = 0
-    if verbose: print "\t\tBegining revision loop"
+    if verbose:
+        i = 0
+    if verbose:
+        print "\t\tBegining revision loop"
     for rev in revlist:
-        if verbose: print "\t\t\tWorking on Revision %03i"%(i)
-        if verbose: i += 1
+        if verbose:
+            print "\t\t\tWorking on Revision %03i"%(i)
+        if verbose:
+            i += 1
         # Start a new list to contain the xml
         revxml = ['    <revision>']
         ## Trying to pull out various values, and making them into xml
-        if verbose: print "\t\t\t\tExtracting revision ID, timestamp, user, and comment"
+        if verbose:
+            print "\t\t\t\tExtracting revision ID, timestamp, user, and comment"
         ### ID
-        try: revid = rev['revid']
-        except: raise "Can not find revid for %s in toXML()"%(rev)
+        try: 
+            revid = rev['revid']
+        except: 
+            raise "Can not find revid for %s in toXML()"%(rev)
         revxml.append(returnXMLtag('id',revid,space='      '))
         ### Timestamp
-        try: timestamp = rev['timestamp']
-        except: raise "Can not find timestamp for %s in toXML()"%(rev)
+        try: 
+            timestamp = rev['timestamp']
+        except: 
+            raise "Can not find timestamp for %s in toXML()"%(rev)
         revxml.append(returnXMLtag('timestamp',timestamp,space='      '))
         ### User
-        try: user = rev['user']
-        except: raise "Can not find user for %s in toXML()"%(rev)
+        try: 
+            user = rev['user']
+        except: 
+            raise "Can not find user for %s in toXML()"%(rev)
         #### Users need <contributor> tags around them, also IPs and Users are different
         revxml.append('      <contributor>')
-        if isIP(user): revxml.append(returnXMLtag('ip',user,'        '))
-        else:          revxml.append(returnXMLtag('username',user,'        '))
+        if isIP(user): 
+            revxml.append(returnXMLtag('ip',user,'        '))
+        else:          
+            revxml.append(returnXMLtag('username',user,'        '))
         revxml.append('      </contributor>')
         ### Comment
-        try: comment = makesafe(rev['comment'])
-        except: comment = '' # They do not return a comment if it is blank
+        try: 
+            comment = makesafe(rev['comment'])
+        except: 
+            comment = '' # They do not return a comment if it is blank
         revxml.append(returnXMLtag('comment',comment,'      '))
         ### Pulling out the actual contents
-        if verbose: print "\t\t\t\tExtracting contents"
-        try: editcont = makesafe(rev['*'])
-        except: raise "Can not find content for %s in toXML()"%(rev)
+        if verbose:
+            print "\t\t\t\tExtracting contents"
+        try: 
+            editcont = makesafe(rev['*'])
+        except: 
+            raise "Can not find content for %s in toXML()"%(rev)
         revxml.append(returnXMLtag('text',editcont,'      ',alt='xml:space="preserve"'))
         # Close up the xml and add to the finalxml
         revxml.append('    </revision>')
         finalxml += revxml
 
-    if verbose: print "\t\tFinished revision loop"
+    if verbose:
+        print "\t\tFinished revision loop"
 
     # Closing up the tags
-    if verbose: print "\t\tClosing XML"
+    if verbose:
+        print "\t\tClosing XML"
     finalxml.append('  </page>')
     finalxml.append('</mediawiki>')
 
@@ -230,13 +273,19 @@ def isIP( name ):
     """
     # Can it be split on . into 4?
     namelen = len(name.split('.'))
-    try: assert namelen == 4
-    except AssertionError: return False
+    try: 
+        assert namelen == 4
+    except AssertionError: 
+        return False
     # Ok, is each of the 4 an Int? And between 0-255
     for i in range(4):
-        try: null = int(name.split('.')[i]); assert 0 <= null <= 255
-        except ValueError: return False
-        except AssertionError: return False
+        try: 
+            null = int(name.split('.')[i])
+            assert 0 <= null <= 255
+        except ValueError: 
+            return False
+        except AssertionError: 
+            return False
     # Ok, I guess it's an IP
     return True
 
@@ -276,7 +325,8 @@ def writeFile( contents, filename=options.filename, verbose=options.verbose ):
     output:
         No output (not even None)
     """
-    if verbose: print "\tWriting file "+filename+" now."
+    if verbose:
+        print "\tWriting file "+filename+" now."
 
     try:
         ff = open(filename,'w')
@@ -286,11 +336,13 @@ def writeFile( contents, filename=options.filename, verbose=options.verbose ):
         # If it's only ascii, we can just write a nice happy ascii file
         try:
             ff.write(contents)
-            if verbose: print "\t\tWriting as ASCII"
+            if verbose:
+                print "\t\tWriting as ASCII"
         # otherwise we have to convert it all to unicode
         except UnicodeEncodeError:
             ff.write(contents.encode("utf-8"))
-            if verbose: print "\t\tWriting as utf-8"
+            if verbose:
+                print "\t\tWriting as utf-8"
 
         ff.close()
 
@@ -310,7 +362,8 @@ def returnXMLhead(verbose=options.verbose):
     output:
         xmllist         (list)     : contains the xml header, each lines is a line of xml
     """
-    if verbose: print "\t\tWriting XML header"
+    if verbose:
+        print "\t\tWriting XML header"
     finalxml= """<mediawiki xmlns="http://www.mediawiki.org/xml/export-0.3/"\
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
 xsi:schemaLocation="http://www.mediawiki.org/xml/export-0.3/ \
@@ -370,8 +423,10 @@ def downloadArticles(articlename=options.articlename, action=options.action, pro
     output:
         No output (not even None)
     """
-    if verbose: print "Begining Export"
-    if verbose: print "\tSplit article into multiple files set to: "+str(split)
+    if verbose:
+        print "Begining Export"
+    if verbose:
+        print "\tSplit article into multiple files set to: "+str(split)
 
     ## If the content is going to be split
     if split:
@@ -380,7 +435,8 @@ def downloadArticles(articlename=options.articlename, action=options.action, pro
             (cont,startid) = getArticle(articlename=articlename, action=action, prop=prop, rvstartid=rvstartid, rvdir=rvdir, limit=limit, verbose=verbose, split=split)
             cont = toXML(cont)
             writeFile(cont,filename+"%03i" % i)
-            if startid == None: break
+            if startid == None:
+                break
             else: 
                 rvstartid = startid
                 i += 1
@@ -391,15 +447,20 @@ def downloadArticles(articlename=options.articlename, action=options.action, pro
         (cont,startid) = getArticle(articlename=articlename, action=action, prop=prop, rvstartid=rvstartid, rvdir=rvdir, limit=limit, verbose=verbose, split=split)
         while startid: # If None, terminates
             (newcont,startid) = getArticle(articlename=articlename, action=action, prop=prop, rvstartid=startid, rvdir=rvdir, limit=limit, verbose=verbose, split=split)
-            try: articleid = cont['query']['pages'].keys()[0]
-            except KeyError: raise "Can not determine articleid"
-            try:  cont['query']['pages'][articleid]['revisions'] += newcont['query']['pages'][articleid]['revisions'] # Trying too add revisions lists together
-            except KeyError: raise "Can not open the revisions lists in one of the content versions"
+            try:
+                articleid = cont['query']['pages'].keys()[0]
+            except KeyError:
+                raise "Can not determine articleid"
+            try:
+                cont['query']['pages'][articleid]['revisions'] += newcont['query']['pages'][articleid]['revisions'] # Trying too add revisions lists together
+            except KeyError:
+                raise "Can not open the revisions lists in one of the content versions"
         # Now with one combined list, we run as normal
         cont = toXML(cont)
         writeFile(cont,filename)
 
-    if verbose: print "Finished Export"
+    if verbose:
+        print "Finished Export"
 
 ### RUN Python, RUN!
 downloadArticles()
