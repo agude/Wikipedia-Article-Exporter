@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-#  Copyright (C) 2008  Alexander Gude - alex.public.account+GetWiki@gmail.com
+#  Copyright (C) 2011  Alexander Gude - alex.public.account+GetWiki@gmail.com
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -19,8 +19,8 @@
 #  The most recent version of this program is avaible at:
 #  http://code.google.com/p/wikipedia-article-exporter/
 #
-#  Version 2.0.1
-#  Sept. 25th (Thursday), 2008
+#  Version 2.1
+#  June 7th (Tuesday), 2011
 """
 
 import urllib,urllib2
@@ -32,7 +32,7 @@ import cjson # Using 1.0.5, found at: http://pypi.python.org/pypi/python-cjson/
     This part allows command line options to be parsed
 """
 usage = "usage: python %prog [OPTIONS] -f 'DEST_FILE' -a 'SOURCE_ARTICLE'"
-version = "%prog Version 2.0.1\nCopyright (C) 2008 Alexander Gude - alex.public.account+GetWiki@gmail.com\nThis is free software.  You may redistribute copies of it under the terms of\nthe GNU General Public License <http://www.gnu.org/licenses/gpl.html>.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Alexander Gude."
+version = "%prog Version 2.1\nCopyright (C) 2011 Alexander Gude - alex.public.account+GetWiki@gmail.com\nThis is free software.  You may redistribute copies of it under the terms of\nthe GNU General Public License <http://www.gnu.org/licenses/gpl.html>.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Alexander Gude."
 parser = OptionParser(usage=usage,version=version)
 parser.add_option("-a", "--article", action="store", type="string", dest="articlename", help="the article name to be exported")
 parser.add_option("-f", "--file", action="store", type="string", dest="filename", help="the file to save the article to")
