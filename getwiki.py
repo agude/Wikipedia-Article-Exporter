@@ -1,5 +1,4 @@
 #!/usr/bin/python
-"""
 #  Copyright (C)2013  Alexander Gude - alex.public.account+GetWiki@gmail.com
 #
 #  This program is free software; you can redistribute it and/or modify
@@ -18,7 +17,6 @@
 #
 #  The most recent version of this program is avaible at:
 #  http://code.google.com/p/wikipedia-article-exporter/
-"""
 
 import urllib
 import urllib2
